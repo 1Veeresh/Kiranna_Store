@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Kalaburgi Kanaja • Kirana Store</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, Arial; margin:0; background:#fafafa; color:#222; }
+    header { background:#155e75; color:#fff; padding:16px 20px; }
+    .wrap { max-width:1000px; margin:24px auto; padding:0 16px; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap:16px; }
+    .card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 1px 8px rgba(0,0,0,.06); }
+    .card h3 { margin:0 0 8px; }
+    .muted { color:#666; font-size:14px; }
+    .row { display:flex; align-items:center; gap:8px; margin-top:12px; }
+    .btn { background:#155e75; color:#fff; border:0; padding:8px 12px; border-radius:6px; cursor:pointer; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .cart { position:sticky; top:12px; }
+    .cart ul { list-style:none; padding:0; margin:0; }
+    .cart li { display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px dashed #eee; }
+    .total { font-weight:700; font-size:18px; }
+    form { display:grid; gap:10px; margin-top:16px; }
+    input, textarea, select { padding:10px; border-radius:8px; border:1px solid #ddd; width:100%; }
+    footer { margin:36px 0; color:#666; font-size:14px; text-align:center; }
+    .pill { background:#ecfeff; color:#155e75; padding:2px 8px; border-radius:999px; font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <h2>Kalaburgi Kanaja • Kirana Store</h2>
+      <div class="muted">Taste of Kalaburgi — Fresh • Honest • Local</div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="grid">
+      <!-- Products -->
+      <div class="card">
+        <h3>🛒 Products</h3>
+        <div class="muted">Home delivery: <span class="pill">₹20 extra within 2KMS</span></div>
+        <div id="catalog" class="grid" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Cart + Checkout -->
+      <div class="card cart">
+        <h3>🧾 Your Cart</h3>
+        <ul id="cartList"></ul>
+        <div class="row"><span>Subtotal</span><strong id="subtotal">₹0</strong></div>
+        <div class="row"><span>Delivery</span><strong id="delivery">₹0</strong></div>
+        <div class="row total"><span>Grand Total</span><span id="grandTotal">₹0</span></div>
+        <hr />
+        <h3>📦 Checkout</h3>
+        <form id="orderForm">
+          <input type="text" id="name" placeholder="Full name" required />
+          <input type="tel" id="phone" placeholder="Phone (WhatsApp)" required />
+          <textarea id="address" rows="3" placeholder="Delivery address" required></textarea>
+
+          <!-- Home Delivery Question -->
+          <label for="homeDelivery">Do you want home delivery?</label>
+          <select id="homeDelivery" required>
+            <option value="No">No</option>
+            <option value="Yes">Yes (+₹20)</option>
+          </select>
+
+          <button class="btn" type="submit">Place Order</button>
+          <div id="status" class="muted"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <footer>© <span id="year"></span> Kalaburgi Kanaja</footer>
+
+<script>
+  // === Replace with your Google Apps Script Web App URL ===
+  const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbwakp2wfeRxO-nbJdrNLL5ymHRV1Qhlhxjmi36h1pc2vL4M9Tv0wjtoxn9AVGE4QfbS8Q/exec";
+
+  const PRODUCTS = [
+    { id:'toor',     name:'Kalaburagi unpolished Toor Dal/ಗುಲಬುರ್ಗಾ ತೊಗರಿ ಬೇಳೆ(ಅನ್ನಪಾಲಿಶ್)', price:140, emoji:'🫘', cat:'Pulses' },
+    { id:'ground',   name:'Groundnut Bold/ದೊಡ್ಡ ಕಡಲೆಕಾಯಿ', price:130, emoji:'🥜', cat:'Oilseeds' },
+    { id:'jaggery',  name:'Organic Jaggery (Chemical Free)/ಬೆಲ್ಲ (ರಾಸಾಯನಿಕ ರಹಿತ)',      price: 90, emoji:'🍯', cat:'Sweeteners' },
+    { id:'fried',    name:'Fried Gram / Putani / Hurigadal ಹುರುಗಡಲೆ / ಪುಟಾಣಿ',     price:120, emoji:'🌾', cat:'Pulses' }
+  ];
+
+  const cart = {};
+
+  function formatINR(n) { return '₹' + (Math.round(n * 100) / 100).toLocaleString('en-IN'); }
+
+  function renderCatalog() {
+    const el = document.getElementById('catalog');
+    el.innerHTML = '';
+    PRODUCTS.forEach(p => {
+      const qty = cart[p.id] || 0;
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <h4>${p.emoji} ${p.name}</h4>
+        <div class="muted">${p.cat} • ${formatINR(p.price)}/Kg</div>
+        <div class="row">
+          <button class="btn" onclick="updateQty('${p.id}', -1)">➖</button>
+          <input id="qty_${p.id}" type="number" min="0" value="${qty}" 
+                 style="width:60px; text-align:center;" 
+                 onchange="setQty('${p.id}', this.value)">
+          <button class="btn" onclick="updateQty('${p.id}', 1)">➕</button>
+        </div>
+      `;
+      el.appendChild(card);
+    });
+  }
+
+  function updateQty(id, delta) {
+    cart[id] = (cart[id] || 0) + delta;
+    if (cart[id] <= 0) delete cart[id];
+    renderCatalog(); renderCart();
+  }
+
+  function setQty(id, val) {
+    let q = parseInt(val) || 0;
+    if (q <= 0) delete cart[id];
+    else cart[id] = q;
+    renderCatalog(); renderCart();
+  }
+
+  function renderCart() {
+    const ul = document.getElementById('cartList');
+    ul.innerHTML = '';
+    let subtotal = 0;
+    Object.keys(cart).forEach(id => {
+      const p = PRODUCTS.find(x => x.id === id);
+      const qty = cart[id];
+      const line = qty * p.price;
+      subtotal += line;
+      const li = document.createElement('li');
+      li.innerHTML = `<span>${p.name} × ${qty} Kg</span><strong>${formatINR(line)}</strong>`;
+      ul.appendChild(li);
+    });
+
+    const homeDelivery = document.getElementById('homeDelivery')?.value || "No";
+    const delivery = (homeDelivery === "Yes" && subtotal > 0) ? 20 : 0;
+    const grand = subtotal + delivery;
+
+    document.getElementById('subtotal').textContent = formatINR(subtotal);
+    document.getElementById('delivery').textContent = formatINR(delivery);
+    document.getElementById('grandTotal').textContent = formatINR(grand);
+  }
+
+  function getCartSummary() {
+    let summary = [], subtotal = 0;
+    Object.keys(cart).forEach(id => {
+      const p = PRODUCTS.find(x => x.id === id);
+      const qty = cart[id];
+      if (qty > 0) {
+        summary.push(`${p.name} × ${qty} Kg (₹${qty * p.price})`);
+        subtotal += qty * p.price;
+      }
+    });
+    const homeDelivery = document.getElementById('homeDelivery')?.value || "No";
+    const delivery = (homeDelivery === "Yes" && subtotal > 0) ? 20 : 0;
+    const grandTotal = subtotal + delivery;
+    return { summary: summary.join('\n'), subtotal, delivery, grandTotal, homeDelivery };
+  }
+
+  document.getElementById('orderForm').onsubmit = async function(e) {
+    e.preventDefault();
+    const name = document.getElementById('name').value.trim();
+    const phone = document.getElementById('phone').value.trim();
+    const address = document.getElementById('address').value.trim();
+    const homeDelivery = document.getElementById('homeDelivery').value;
+    const cartData = getCartSummary();
+
+    if (!name || !phone || !address || !cartData.summary) {
+      document.getElementById('status').textContent = "⚠️ Please fill all details and add at least one product.";
+      return;
+    }
+
+    document.getElementById('status').textContent = "Submitting your order...";
+
+    const payload = { name, phone, address, products: cartData.summary, subtotal: cartData.subtotal, delivery: cartData.delivery, total: cartData.grandTotal,
+      homeDelivery
+    };
+
+    try {
+      const res = await fetch(WEB_APP_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      const text = await res.text();
+      document.getElementById('status').textContent = text;
+
+      Object.keys(cart).forEach(k => delete cart[k]);
+      renderCatalog(); renderCart(); this.reset();
+    } catch (err) {
+      document.getElementById('status').textContent = "❌ Order failed. Please try again.";
+    }
+  };
+
+  document.getElementById('year').textContent = new Date().getFullYear();
+  renderCatalog(); renderCart();
+</script>
+</body>
+</html>
